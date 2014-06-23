@@ -338,6 +338,20 @@ var Redmine = (function() {
     //TODO: Create Issue to send
     var ret = this.http.Put(REDMINE_URL + '/issues/' + issue_id + '.xml');
   };
+  
+  Redmine.prototype.addTimeEntry = function (issueId, spentOn, hours, activityId, comments) {
+    this.http.SetAuth(API_ACCESS_KEY);
+    
+    var xml = '<time_entry>';
+    xml    += '<issue_id>' + issueId + '</issue_id>';
+    xml    += '<activity_id>' + activityId + '</activity_id>';
+    xml    += '<hours>' + hours + '</hours>';
+    xml    += '<comments>' + comments + '</comments>';
+    xml    += '<spent_on>' + spentOn + '</spent_on>';
+    xml    += '</time_entry>';
+    
+    var ret = this.http.Post(REDMINE_URL + '/time_entries.xml');
+  }
 
   return Redmine;
 
