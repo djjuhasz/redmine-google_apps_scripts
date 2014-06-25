@@ -17,10 +17,10 @@
  *
  */
 
-var REDMINE_URL = 'http://your.redmine.com';
+var REDMINE_URL = 'https://projects.artefactual.com';
 
 // TODO: this should be obtained from a configuration dialog.
-var API_ACCESS_KEY = 'YOUR_API_ACCESS_KEY_HERE!';
+var API_ACCESS_KEY = 'YOUR_API_KEY';
 
 
 // HTTP Class
@@ -36,7 +36,7 @@ var HTTP = (function() {
     this.password = "";
   }
 
-  HTTP.prototype.Request = function(url, method) {
+  HTTP.prototype.Request = function(url, method, payload) {
 
     // Support for HTTP Basic Authentication.
     // if (this.authentication) {
@@ -50,7 +50,13 @@ var HTTP = (function() {
       "headers" : headers,
       "method" : method,
       "validateHttpsCertificates" : false,
+      "muteHttpExceptions": true
     };
+
+    if (typeof payload !== 'undefined') {
+      options['payload'] = payload;
+      options['contentType'] = 'application/json';
+    }
 
     var content = UrlFetchApp.fetch(url, options);
 
@@ -61,12 +67,12 @@ var HTTP = (function() {
     return this.Request(url, "GET");
   };
 
-  HTTP.prototype.Post = function (url) {
-    return this.Request(url, "POST");
+  HTTP.prototype.Post = function (url, payload) {
+    return this.Request(url, "POST", payload);
   };
 
-  HTTP.prototype.Put = function (url) {
-    return this.Request(url, "PUT");
+  HTTP.prototype.Put = function (url, payload) {
+    return this.Request(url, "PUT", payload);
   };
 
   HTTP.prototype.SetAuth = function (username, password) {
@@ -80,22 +86,22 @@ var HTTP = (function() {
 })();
 
 var Cache = (function() {
-  
+
   function Cache() {
     this.store = {};
   }
-  
+
   Cache.prototype.set = function (key, value) {
     this.store[key] = value;
   }
-  
+
   Cache.prototype.get = function (key) {
     return this.store[key] || undefined;
   }
-  
+
   return Cache;
 })();
-             
+
 // Class Translator
 var Translator = (function() {
 
@@ -166,123 +172,123 @@ var Translator = (function() {
 var Redmine = (function() {
 
   function Redmine(base_url, items_by_page) {
-    
+
     this.ITEMS_BY_PAGE = items_by_page || 100;
     this.base_url = base_url || '';
-    
+
     this.http = new HTTP();
     this.http.SetAuth(API_ACCESS_KEY);
-    
+
     this.translator = new Translator();
-    
+
     this.cache = new Cache();
-    
+
     // Privileged methods
     this.paginate = function (url) {
-      
+
       var response = this.http.Get(url);
       var content = response.getContentText();
-      
+
       var xml = Xml.parse(content, true);
       var root = xml.getElement();
-      
+
       var entries = root.getAttribute('total_count').getValue();
-      
+
       var pages = Math.floor((entries / this.ITEMS_BY_PAGE) + 1);
-      
+
       return pages;
     };
-    
+
     this.getDataElement = function (url, root_tag) {
       // TODO: Avoid the use of root_tag and element_tag we can infer it.
-      
+
       if (this.cache.get(url)) {
-      
+
         return this.cache.get(url);
-      
+
       } else {
-        
+
         var data = [];
-        
+
         var xml_content = this.http.Get(url);
         var xml = Xml.parse(xml_content.getContentText(), true);
-        
+
         var root_element = xml.getElement();
         var elements_data = this.translator.xmlToJS(root_element);
-        
+
         var elements = elements_data[root_tag].childs;
-        
+
         this.cache.set(url, elements);
-        
+
         return elements;
       }
     };
-    
+
     this.getData = function (base_url, root_tag, element_tag) {
-      
+
       if (this.cache.get(base_url)) {
 
         return this.cache.get(base_url);
 
       } else {
-      
+
         var data = [];
-        
+
         var pages = this.paginate(base_url);
-        
+
         for (var i = 1; i <= pages; i++) {
-          
+
           if (base_url.indexOf("?") > 0)
             var url = base_url + '&limit=' + this.ITEMS_BY_PAGE + '&page=' + i;
           else
             var url = base_url + '?limit=' + this.ITEMS_BY_PAGE + '&page=' + i;
-          
+
           var xml_content = this.http.Get(url);
           var xml = Xml.parse(xml_content.getContentText(), true);
-          
+
           var root_element = xml.getElement();
           var elements_data = this.translator.xmlToJS(root_element);
-          
+
           var elements = elements_data[root_tag].childs;
-          
+
           if (!elements || elements.length == 0) {
             return "Something went wrong";
           }
-          
+
           for (var j in elements) {
             data.push(elements[j][element_tag].childs);
           }
         }
-        
+
         this.cache.set(base_url, data);
-        
+
         return data;
       }
     };
-      
+
   }
 
   Redmine.prototype.getIssues = function (project_id) {
     Logger.log("Launching getIssues(" + project_id + ")");
-    
+
     var url = REDMINE_URL + '/issues.xml?project_id=' + project_id + '&status_id=*';
     var data = this.getData(url, 'issues', 'issue');
-    
+
     return data;
   };
 
   Redmine.prototype.getProjects = function () {
     Logger.log("Launching getProjects()");
-    
+
     var url = REDMINE_URL + '/projects.xml';
     var data = this.getData(url, 'projects', 'project');
-    
+
     return data;
   };
 
   Redmine.prototype.getProject = function (project_id) {
     Logger.log("Launching getProject(" + project_id + ")");
-    
+
     var url = REDMINE_URL + '/projects/' + project_id + '.xml';
     var data = this.getDataElement(url, 'project');
 
@@ -291,16 +297,16 @@ var Redmine = (function() {
 
   Redmine.prototype.getTimeEntries = function (project_id) {
     Logger.log("Launching getTimeEntries(" + project_id + ")");
-    
+
     var url = REDMINE_URL + '/projects/' + project_id + '/time_entries.xml';
     var data = this.getData(url, 'time_entries', 'time_entry');
 
     return data;
   };
-  
+
   Redmine.prototype.getTimeEntriesByIssue = function (issue_id, project_id) {
     Logger.log("Launching getTimeEntriesByIssue(" + issue_id + ")");
-    
+
     /* By any reason this is returning bad values */
     /*
     var url = REDMINE_URL + '/issues/' + issue_id + '/time_entries.xml';
@@ -308,26 +314,26 @@ var Redmine = (function() {
 
     return data;
     */
-    
+
     var data = [];
-    
+
     var time_entries = this.getTimeEntries(project_id);
-    
+
     for (var i = 0; i < time_entries.length; i++) {
       var te_issue_id = this.translator.searchTag(time_entries[i], 'issue');
       if (te_issue_id.attributes.id == issue_id)
         data.push(time_entries[i]);
     }
-    
+
     return data;
   };
 
   Redmine.prototype.getIssuesByTracker = function (project_id, tracker_id) {
     Logger.log("Launching getIssuesByTracker("+project_id+","+tracker_id+")");
-    
+
     var url = REDMINE_URL + '/issues.xml?project_id=' + project_id + '&tracker_id='+ tracker_id + '&status_id=*';
     var data = this.getData(url, 'issues', 'issue');
-    
+
     return data;
   };
 
@@ -338,19 +344,25 @@ var Redmine = (function() {
     //TODO: Create Issue to send
     var ret = this.http.Put(REDMINE_URL + '/issues/' + issue_id + '.xml');
   };
-  
-  Redmine.prototype.addTimeEntry = function (issueId, spentOn, hours, activityId, comments) {
+
+  Redmine.prototype.addTimeEntry = function (row) {
+    Logger.log("Posting time entry("+row.issueNum+","+row.date+")");
+
     this.http.SetAuth(API_ACCESS_KEY);
-    
-    var xml = '<time_entry>';
-    xml    += '<issue_id>' + issueId + '</issue_id>';
-    xml    += '<activity_id>' + activityId + '</activity_id>';
-    xml    += '<hours>' + hours + '</hours>';
-    xml    += '<comments>' + comments + '</comments>';
-    xml    += '<spent_on>' + spentOn + '</spent_on>';
-    xml    += '</time_entry>';
-    
-    var ret = this.http.Post(REDMINE_URL + '/time_entries.xml');
+
+    Logger.log('activity id: ' + row.activityId);
+
+    var payload = {'time_entry': {
+        'issue_id'   : row.issueNum,
+        'activity_id': row.activityId,
+        'hours'      : row.hours,
+        'comments'   : row.desc,
+        'spent_on'   : row.date
+    }};
+
+    var ret = this.http.Post(REDMINE_URL + '/time_entries.json', JSON.stringify(payload));
+
+    Logger.log('Return: ' + ret);
   }
 
   return Redmine;

@@ -26,16 +26,42 @@ function postTimesheet() {
   // Combine duplicate entries for the same day
   timesheet.rollup();
 
-  // TODO: Send to redmine
+  // Send timesheet to Redmine
   timesheet.send();
 
+  function Activity(actName) {
+
+    // Lookup table
+    this.activityIds = {
+      'Administration' : '16',
+      'Analysis/Design': '18',
+      'Deployment'     : '12',
+      'Development'    : '9',
+      'Documentation'  : '10',
+      'QA/Testing'     : '13',
+      'Support'        : '14',
+      'Training'       : '22',
+      'Travel'         : '24',
+      'Operations'     : '23'
+    }
+
+    this.name = actName;
+    this.id = this.activityIds[actName];
+
+    return this;
+  }
+
   function Row(ssRow) {
-    this.issueNum = ssRow[0];
+    this.issueNum = ssRow[0].toString();
     this.desc = ssRow[1];
     this.start = ssRow[2];
     this.end = ssRow[3];
     this.hours = parseFloat(ssRow[4]);
     this.date = ssRow[5];
+
+    // Lookup activityId
+    activity = new Activity(ssRow[6]);
+    this.activityId = activity.id;
 
     // Convert date to ISO string
     if (this.date.toString() !== '') {
@@ -110,9 +136,11 @@ function postTimesheet() {
       }
     }
 
+    // Call redmine method to post time entries
     this.send = function() {
       for (var i = 0; i < this.rows.length; i++) {
-        Logger.log("Added issue #" + this.rows[i].issueNum + ", Date: " + this.rows[i].date + ", hours: " + this.rows[i].hours + ", Desc: " + this.rows[i].desc);
+        redmine = new Redmine;
+        redmine.addTimeEntry(this.rows[i]);
       }
     }
   }
