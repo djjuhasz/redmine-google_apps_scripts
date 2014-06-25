@@ -350,8 +350,6 @@ var Redmine = (function() {
 
     this.http.SetAuth(API_ACCESS_KEY);
 
-    Logger.log('activity id: ' + row.activityId);
-
     var payload = {'time_entry': {
         'issue_id'   : row.issueNum,
         'activity_id': row.activityId,
